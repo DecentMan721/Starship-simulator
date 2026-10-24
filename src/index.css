@@ -1,0 +1,6 @@
+/* The 3D view fills the whole window, so drop the browser's default page
+   margin (which would push it past the edges and add scrollbars) */
+body {
+    margin: 0;
+    overflow: hidden;
+}

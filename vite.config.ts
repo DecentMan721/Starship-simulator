@@ -4,4 +4,6 @@ import { defineConfig } from 'vite'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  // Served from https://decentman721.github.io/Starship-simulator/
+  base: '/Starship-simulator/',
 })

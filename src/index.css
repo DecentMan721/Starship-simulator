@@ -4,3 +4,11 @@ body {
     margin: 0;
     overflow: hidden;
 }
+
+/* Mobile browsers enlarge text they think is too small to read, by
+   different amounts depending on orientation. The overlays are sized on
+   purpose, so keep their text at the size given. */
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}

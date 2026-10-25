@@ -6,6 +6,7 @@ import MissionTimeline from "../sim/MissionTimeline";
 import SimPanel from "../sim/SimPanel";
 import VehicleDiagrams from "../sim/VehicleDiagrams";
 import { useFlightPlayback } from "../sim/useFlightPlayback";
+import { useUiScale } from "../sim/useUiScale";
 
 
 // The flight simulator: the flight profile and autopilot drive the rocket,
@@ -15,6 +16,7 @@ export default function Home() {
     const [follow, setFollow] = useState<"booster" | "ship">("booster")
     const playback = useFlightPlayback()
     const { flight, commands } = playback
+    const ui = useUiScale()
 
 
     return (
@@ -33,16 +35,19 @@ export default function Home() {
                 display: "flex",
                 flexDirection: "column",
                 gap: 6,
+                transform: `scale(${ui.scale})`,
+                transformOrigin: "top right",
             }}>
                 <SimPanel follow={follow} onFollowChange={setFollow} />
             </div>
 
-            <VehicleDiagrams flight={flight} controls={commands.controls} />
-            <MissionTimeline playback={playback} />
+            <VehicleDiagrams flight={flight} controls={commands.controls} ui={ui} />
+            <MissionTimeline playback={playback} ui={ui} />
             <EngineOverlay
                 flight={flight}
                 boosterGimbal={commands.controls.boosterGimbal}
                 shipGimbal={commands.controls.shipGimbal}
+                ui={ui}
             />
 
             <StarShip
@@ -50,6 +55,7 @@ export default function Home() {
                 tower={commands.tower}
                 sim={flight}
                 follow={follow}
+                creditsAtTop={ui.scale < 1}
             />
         </main>
     )

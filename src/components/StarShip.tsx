@@ -29,6 +29,9 @@ interface props {
     sim?: FlightState | null;
     // Which vehicle the camera follows in the simulator
     follow?: 'booster' | 'ship';
+    // Small screens: put the map credits in the top-left corner, where
+    // they don't run into the timeline at the bottom
+    creditsAtTop?: boolean;
 }
 
 // Scale: 1 unit = 1 meter. Main dimensions live in vehicleDimensions.ts.
@@ -839,6 +842,7 @@ export default function StarShip({
     flight = DEFAULT_FLIGHT,
     sim = null,
     follow = 'booster',
+    creditsAtTop = false,
 }: props){
     const mountRef = useRef<HTMLDivElement>(null);
 
@@ -1089,11 +1093,9 @@ export default function StarShip({
             {/* The map data licenses require crediting the sources on screen */}
             <div style={{
                 position: "fixed",
-                left: "50%",
-                transform: "translateX(-50%)",
-                bottom: 2,
-                width: "90vw",
-                textAlign: "center",
+                ...(creditsAtTop
+                    ? { left: 8, top: 6, width: "45vw", textAlign: "left" as const }
+                    : { left: "50%", transform: "translateX(-50%)", bottom: 2, width: "90vw", textAlign: "center" as const }),
                 color: "rgba(255, 255, 255, 0.7)",
                 fontFamily: "sans-serif",
                 fontSize: 9,

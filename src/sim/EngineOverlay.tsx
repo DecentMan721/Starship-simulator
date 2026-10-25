@@ -1,5 +1,6 @@
 import { GIMBAL_LIMIT, type Gimbal } from '../components/controlSurfaces';
 import type { EngineSet, FlightState } from './flightProfile';
+import type { UiLayout } from './useUiScale';
 
 // Bottom-right overlay: each vehicle's Raptors seen from below, Starship on
 // top and Super Heavy underneath. Firing engines glow; the ones that gimbal
@@ -87,14 +88,16 @@ function EngineDiagram({ name, engines, set, gimbal }: {
     )
 }
 
-export default function EngineOverlay({ flight, boosterGimbal, shipGimbal }: {
-    flight: FlightState; boosterGimbal: Gimbal; shipGimbal: Gimbal;
+export default function EngineOverlay({ flight, boosterGimbal, shipGimbal, ui }: {
+    flight: FlightState; boosterGimbal: Gimbal; shipGimbal: Gimbal; ui: UiLayout;
 }) {
     return (
         <div style={{
             position: "fixed",
             right: 14,
-            bottom: 14,
+            bottom: ui.panelBottom,
+            transform: `scale(${ui.scale})`,
+            transformOrigin: "bottom right",
             padding: "8px 12px",
             display: "flex",
             flexDirection: "column",

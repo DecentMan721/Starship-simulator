@@ -1,5 +1,6 @@
 import { GRID_FIN_ANGLES, type ControlSurfaces } from '../components/controlSurfaces';
 import type { FlightState, VehicleState } from './flightProfile';
+import type { UiLayout } from './useUiScale';
 
 // Bottom-left overlay: flat drawings of Starship (top) and Super Heavy
 // (bottom), with each fin drawn at its current angle and the number next to
@@ -137,12 +138,14 @@ function Stats({ name, v }: { name: string; v: VehicleState & { phase: string } 
     );
 }
 
-export default function VehicleDiagrams({ flight, controls }: { flight: FlightState; controls: ControlSurfaces }) {
+export default function VehicleDiagrams({ flight, controls, ui }: { flight: FlightState; controls: ControlSurfaces; ui: UiLayout }) {
     return (
         <div style={{
             position: "fixed",
             left: 14,
-            bottom: 14,
+            bottom: ui.panelBottom,
+            transform: `scale(${ui.scale})`,
+            transformOrigin: "bottom left",
             padding: "8px 12px",
             display: "flex",
             flexDirection: "column",

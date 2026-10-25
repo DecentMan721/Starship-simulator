@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { FaPause, FaPlay, FaRotateLeft } from 'react-icons/fa6';
 import { SIM_END, SIM_START, TIMELINE_EVENTS } from './flightProfile';
 import type { useFlightPlayback } from './useFlightPlayback';
+import type { UiLayout } from './useUiScale';
 
 // Webcast-style mission timeline, fixed at the bottom center of the screen:
 // a gently curved arc with the milestones as circles (hover for the name),
@@ -60,9 +61,10 @@ const SPEEDS = [1, 2, 5, 10, 25, 50];
 
 interface Props {
     playback: ReturnType<typeof useFlightPlayback>;
+    ui: UiLayout;
 }
 
-export default function MissionTimeline({ playback }: Props) {
+export default function MissionTimeline({ playback, ui }: Props) {
     const { time, setTime: onSeek, playing, setPlaying, speed, setSpeed, reset } = playback;
     const svgRef = useRef<SVGSVGElement>(null);
     const [hovered, setHovered] = useState<number | null>(null);
@@ -89,9 +91,10 @@ export default function MissionTimeline({ playback }: Props) {
             position: "fixed",
             left: "50%",
             bottom: 14,
-            transform: "translateX(-50%)",
+            transform: `translateX(-50%) scale(${ui.timelineScale})`,
+            transformOrigin: "bottom center",
             // As wide as fits between the bottom-left and bottom-right overlays
-            width: "clamp(520px, calc(100vw - 440px), 1400px)",
+            width: ui.timelineWidth,
             userSelect: "none",
         }}>
             <svg

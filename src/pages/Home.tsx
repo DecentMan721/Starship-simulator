@@ -14,6 +14,8 @@ import { useUiScale } from "../sim/useUiScale";
 export default function Home() {
 
     const [follow, setFollow] = useState<"booster" | "ship">("booster")
+    const [showMarkers, setShowMarkers] = useState(false)
+    const [resetView, setResetView] = useState(0)
     const playback = useFlightPlayback()
     const { flight, commands } = playback
     const ui = useUiScale()
@@ -38,7 +40,13 @@ export default function Home() {
                 transform: `scale(${ui.scale})`,
                 transformOrigin: "top right",
             }}>
-                <SimPanel follow={follow} onFollowChange={setFollow} />
+                <SimPanel
+                    follow={follow}
+                    onFollowChange={setFollow}
+                    showMarkers={showMarkers}
+                    onShowMarkersChange={setShowMarkers}
+                    onResetView={() => setResetView(n => n + 1)}
+                />
             </div>
 
             <VehicleDiagrams flight={flight} controls={commands.controls} ui={ui} />
@@ -56,6 +64,8 @@ export default function Home() {
                 sim={flight}
                 follow={follow}
                 creditsAtTop={ui.scale < 1}
+                showMarkers={showMarkers}
+                resetView={resetView}
             />
         </main>
     )

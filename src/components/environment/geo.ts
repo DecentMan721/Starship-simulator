@@ -7,7 +7,7 @@ import * as THREE from 'three';
 export const EARTH_RADIUS = 6_371_000;          // mean radius, m
 const MERCATOR_RADIUS = 6_378_137;              // what web map tiles are built on
 
-// Starbase orbital launch mount, Boca Chica, Texas
+// Starbase orbital launch mount, Starbase, Texas
 export const SITE = { lat: 25.9966, lon: -97.1567 };
 
 const toRad = (deg: number) => deg * Math.PI / 180;
@@ -27,6 +27,15 @@ export function lonLatToTile(lon: number, lat: number, zoom: number) {
     return {
         x: (lon + 180) / 360 * n,
         y: (1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n,
+    };
+}
+
+// The reverse: tile coordinates (fractions allowed) → degrees
+export function tileToLonLat(x: number, y: number, zoom: number) {
+    const n = 2 ** zoom;
+    return {
+        lon: x / n * 360 - 180,
+        lat: Math.atan(Math.sinh(Math.PI * (1 - 2 * y / n))) * 180 / Math.PI,
     };
 }
 

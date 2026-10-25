@@ -11,6 +11,7 @@ import { drawLaunchTower, MOUNT_HEIGHT } from './launchTower';
 import { createEnvironment, ENVIRONMENT_CREDITS } from './environment';
 import { EARTH_RADIUS } from './environment/geo';
 import { createOceanPatch } from './environment/ocean';
+import { createVehicleMarkers } from './vehicleMarkers';
 import { SPLASHDOWN_DOWNRANGE, type FlightState } from '../sim/flightProfile';
 import {
     BOOSTER_HEIGHT, BOOSTER_PIVOT_Y, GRID_FIN_DEPTH, GRID_FIN_Y, HSR_HEIGHT, NOSE_HEIGHT, RADIUS,
@@ -32,6 +33,10 @@ interface props {
     // Small screens: put the map credits in the top-left corner, where
     // they don't run into the timeline at the bottom
     creditsAtTop?: boolean;
+    // Labels marking where the booster and ship are, even far away
+    showMarkers?: boolean;
+    // Bump this number to zoom the camera back to its starting distance
+    resetView?: number;
 }
 
 // Scale: 1 unit = 1 meter. Main dimensions live in vehicleDimensions.ts.
@@ -843,6 +848,8 @@ export default function StarShip({
     sim = null,
     follow = 'booster',
     creditsAtTop = false,
+    showMarkers = false,
+    resetView = 0,
 }: props){
     const mountRef = useRef<HTMLDivElement>(null);
 
@@ -875,6 +882,13 @@ export default function StarShip({
         simRef.current = sim;
         followRef.current = follow;
     }, [sim, follow]);
+
+    const showMarkersRef = useRef(showMarkers);
+    const resetViewRef = useRef(resetView);
+    useEffect(() => {
+        showMarkersRef.current = showMarkers;
+        resetViewRef.current = resetView;
+    }, [showMarkers, resetView]);
 
     useEffect(() => {
         const mount = mountRef.current;
@@ -955,6 +969,25 @@ export default function StarShip({
         const followDelta = new THREE.Vector3();
         const followTarget = new THREE.Vector3();
 
+        // Reset zoom: the starting view, as offsets from the followed vehicle
+        // (recorded on the first frame), and whether we're easing back to it
+        let defaultView: { target: THREE.Vector3; distance: number } | null = null;
+        let handledReset = resetViewRef.current;
+        let resetting = false;
+        const resetTarget = new THREE.Vector3();
+        const viewDirection = new THREE.Vector3();
+        // Grabbing the view mid-reset hands control straight back
+        controls.addEventListener('start', () => { resetting = false; });
+
+        const markers = createVehicleMarkers(mount, [
+            { label: 'SUPER HEAVY', color: '#ffb347' },
+            { label: 'STARSHIP', color: '#8fd3ff' },
+        ]);
+        // The middle of each vehicle: the booster's pivot is its center of
+        // mass; the ship's origin is at its base
+        const SHIP_CENTER = new THREE.Vector3(0, (SHIP_BODY_HEIGHT + NOSE_HEIGHT) / 2, 0);
+        const markerPositions = [new THREE.Vector3(), new THREE.Vector3()];
+
         let lastTime = performance.now();
         renderer.setAnimationLoop(() => {
             // Seconds since the last frame, so motion speed doesn't depend on FPS
@@ -1028,7 +1061,13 @@ export default function StarShip({
             // angle around the planet, eased so switching vehicles swings
             // the view smoothly. Rotating about a point = rotate, then shift
             // so that point ends up back where it was.
-            const angle = THREE.MathUtils.damp(world.rotation.z, angleAroundEarth(followed.position), 4, dt);
+            // atan2 jumps from +180° to -180° on the far side of the planet
+            // (splashdown is ~194° around), so ease along the shortest way
+            // to the new angle instead of swinging the whole world back
+            // around the long way. The angle itself is allowed past ±180°.
+            const goal = angleAroundEarth(followed.position);
+            const turn = THREE.MathUtils.euclideanModulo(goal - world.rotation.z + Math.PI, 2 * Math.PI) - Math.PI;
+            const angle = THREE.MathUtils.damp(world.rotation.z, world.rotation.z + turn, 4, dt);
             world.rotation.z = angle;
             world.position.set(-EARTH_RADIUS * Math.sin(angle), -EARTH_RADIUS + EARTH_RADIUS * Math.cos(angle), 0);
             world.updateMatrixWorld(true);
@@ -1042,15 +1081,44 @@ export default function StarShip({
             controls.target.add(moved);
             followPoint.copy(target);
 
+            defaultView ??= {
+                target: controls.target.clone().sub(followPoint),
+                distance: camera.position.distanceTo(controls.target),
+            };
+            if (resetViewRef.current !== handledReset) {
+                handledReset = resetViewRef.current;
+                resetting = true;
+            }
+            if (resetting) {
+                // Ease the orbit point back onto the vehicle and the distance
+                // back to the start, keeping the viewing angle. The distance
+                // eases in log space so zooming in from orbit doesn't take
+                // forever on the last few hundred meters.
+                resetTarget.copy(followPoint).add(defaultView.target);
+                viewDirection.subVectors(camera.position, controls.target).normalize();
+                const distance = Math.exp(THREE.MathUtils.damp(
+                    Math.log(camera.position.distanceTo(controls.target)), Math.log(defaultView.distance), 6, dt,
+                ));
+                controls.target.lerp(resetTarget, 1 - Math.exp(-6 * dt));
+                camera.position.copy(controls.target).addScaledVector(viewDirection, distance);
+                if (Math.abs(distance / defaultView.distance - 1) < 0.01 && controls.target.distanceTo(resetTarget) < 0.5) {
+                    resetting = false;
+                }
+            }
+
             // What the world looks like depends on how high the camera is
             // above the (curved) ground. Earth's center doesn't move when
             // the world turns, since it turns about that point.
             const cameraAltitude = camera.position.distanceTo(EARTH_CENTER) - EARTH_RADIUS;
-            environment.update(cameraAltitude, dt);
+            environment.update(cameraAltitude, dt, camera.position);
             ocean.visible = cameraAltitude < 50_000;
 
             controls.update(); // needed every frame when damping is on
             renderer.render(scene, camera);
+
+            vehicle.booster.getWorldPosition(markerPositions[0]);
+            vehicle.ship.localToWorld(markerPositions[1].copy(SHIP_CENTER));
+            markers.update(camera, markerPositions, showMarkersRef.current, 'STARSHIP + SUPER HEAVY');
         });
 
         const handleResize = () => {
@@ -1064,6 +1132,7 @@ export default function StarShip({
             window.removeEventListener('resize', handleResize);
             renderer.setAnimationLoop(null);
             controls.dispose();
+            markers.dispose();
             environment.dispose();
             ocean.traverse(obj => {
                 if (obj instanceof THREE.Mesh) (obj.material as THREE.Material).dispose();

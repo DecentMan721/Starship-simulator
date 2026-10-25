@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { autopilot } from './autopilot';
 import { SIM_END, SIM_START, sampleFlight } from './flightProfile';
 
@@ -34,16 +34,25 @@ export function useFlightPlayback() {
         return () => cancelAnimationFrame(frame);
     }, [playing, speed]);
 
+    // Jump to a time. The ref is updated right away too: if it waited for
+    // the effect above, a playing frame loop could still read the old time
+    // and snap back to it, which makes dragging the timeline stutter.
+    const seek = useCallback((t: number) => {
+        const next = Math.min(SIM_END, Math.max(SIM_START, t));
+        timeRef.current = next;
+        setTime(next);
+    }, []);
+
     // Only recomputed when the time changes
     const flight = useMemo(() => sampleFlight(time), [time]);
     const commands = useMemo(() => autopilot(flight), [flight]);
 
     return {
-        time, setTime, playing, setPlaying, speed, setSpeed,
+        time, setTime: seek, playing, setPlaying, speed, setSpeed,
         flight, commands,
         reset: () => {
             setPlaying(false);
-            setTime(SIM_START);
+            seek(SIM_START);
         },
     };
 }

@@ -8,7 +8,9 @@ import type { UiLayout } from './useUiScale';
 // a gently curved arc with the milestones as circles (hover for the name),
 // a dot for "now", the T-/T+ clock centered under it, and restart,
 // play/pause and playback speed below that. Click or drag anywhere along
-// the arc to jump to that moment.
+// the arc to jump to that moment; playback pauses while you drag and picks
+// up again when you let go. Hovering the arc shows the time under the
+// pointer.
 
 // Drawn in a 1000 × 110 box and scaled to fit. The arc is a slice of a big
 // circle: 940 wide, rising 40 in the middle.
@@ -68,23 +70,38 @@ export default function MissionTimeline({ playback, ui }: Props) {
     const { time, setTime: onSeek, playing, setPlaying, speed, setSpeed, reset } = playback;
     const svgRef = useRef<SVGSVGElement>(null);
     const [hovered, setHovered] = useState<number | null>(null);
-    const dragging = useRef(false);
+    const [scrubbing, setScrubbing] = useState(false);
+    const [pointerFraction, setPointerFraction] = useState<number | null>(null);
+    const resumeAfterScrub = useRef(false);
 
-    // Screen position → time: convert to the SVG's own coordinates, then
-    // invert pointAt (the angle comes from how far left/right of center)
-    function seekTo(e: React.PointerEvent) {
-        const svg = svgRef.current;
-        const ctm = svg?.getScreenCTM();
-        if (!svg || !ctm) return;
+    // Screen position → fraction along the arc: convert to the SVG's own
+    // coordinates, then invert pointAt (the angle comes from how far
+    // left/right of center)
+    function fractionAt(e: React.PointerEvent) {
+        const ctm = svgRef.current?.getScreenCTM();
+        if (!ctm) return null;
         const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse());
         const a = Math.asin(Math.max(-1, Math.min(1, (p.x - CX) / R)));
-        const fraction = Math.max(0, Math.min(1, (a + HALF_ANGLE) / (2 * HALF_ANGLE)));
-        onSeek(timeAt(fraction));
+        return Math.max(0, Math.min(1, (a + HALF_ANGLE) / (2 * HALF_ANGLE)));
+    }
+    function seekTo(e: React.PointerEvent) {
+        const f = fractionAt(e);
+        if (f !== null) onSeek(timeAt(f));
+    }
+
+    // Let go: carry on playing if it was playing when the drag started
+    function endScrub() {
+        if (!scrubbing) return;
+        setScrubbing(false);
+        if (resumeAfterScrub.current && time < SIM_END) setPlaying(true);
     }
 
     const now = fractionOf(time);
     const nowPoint = pointAt(now);
     const event = hovered !== null ? TIMELINE_EVENTS[hovered] : null;
+    // Time under the pointer, shown while hovering the arc (milestone
+    // labels take priority; while dragging, the big clock already shows it)
+    const preview = !scrubbing && !event && pointerFraction !== null ? timeAt(pointerFraction) : null;
 
     return (
         <div style={{
@@ -100,14 +117,26 @@ export default function MissionTimeline({ playback, ui }: Props) {
             <svg
                 ref={svgRef}
                 viewBox={`0 0 ${W} ${H}`}
-                style={{ width: "100%", display: "block", overflow: "visible", cursor: "pointer", touchAction: "none" }}
+                style={{
+                    width: "100%", display: "block", overflow: "visible", touchAction: "none",
+                    cursor: scrubbing ? "grabbing" : "pointer",
+                }}
                 onPointerDown={e => {
-                    dragging.current = true;
+                    if (e.button !== 0) return;
+                    resumeAfterScrub.current = playing;
+                    setPlaying(false);
+                    setScrubbing(true);
                     e.currentTarget.setPointerCapture(e.pointerId);
                     seekTo(e);
                 }}
-                onPointerMove={e => dragging.current && seekTo(e)}
-                onPointerUp={() => { dragging.current = false; }}
+                onPointerMove={e => {
+                    if (scrubbing) seekTo(e);
+                    else if (e.pointerType === "mouse") setPointerFraction(fractionAt(e));
+                }}
+                onPointerUp={endScrub}
+                onPointerCancel={endScrub}
+                onLostPointerCapture={endScrub}
+                onPointerLeave={() => setPointerFraction(null)}
             >
                 {/* Fat invisible copy of the arc: an easy target to grab */}
                 <path d={arcPath(0, 1)} stroke="transparent" strokeWidth={24} fill="none" />
@@ -138,9 +167,25 @@ export default function MissionTimeline({ playback, ui }: Props) {
                     );
                 })}
 
-                {/* Now */}
-                <circle cx={nowPoint.x} cy={nowPoint.y} r={10} fill="rgba(255,255,255,0.25)" />
-                <circle cx={nowPoint.x} cy={nowPoint.y} r={5} fill="#fff" />
+                {/* Where the pointer would jump to */}
+                {preview !== null && (() => {
+                    const p = pointAt(fractionOf(preview));
+                    const text = missionClock(preview);
+                    const width = text.length * 7 + 16;
+                    return (
+                        <g pointerEvents="none">
+                            <circle cx={p.x} cy={p.y} r={4} fill="rgba(255,255,255,0.6)" />
+                            <rect x={p.x - width / 2} y={p.y - 36} width={width} height={22} rx={4} fill="rgba(10,14,30,0.9)" />
+                            <text x={p.x} y={p.y - 21} textAnchor="middle" fill="#fff" fontSize={12} fontFamily="monospace">
+                                {text}
+                            </text>
+                        </g>
+                    );
+                })()}
+
+                {/* Now: a bigger handle while it's being dragged */}
+                <circle cx={nowPoint.x} cy={nowPoint.y} r={scrubbing ? 14 : 10} fill="rgba(255,255,255,0.25)" />
+                <circle cx={nowPoint.x} cy={nowPoint.y} r={scrubbing ? 7 : 5} fill="#fff" />
 
                 {/* Hover label above the circle */}
                 {event && (() => {
